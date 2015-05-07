@@ -70,6 +70,10 @@ public class HTTPRequestSerializer: NSObject {
         return request
     }
     
+    public func createRequest(url: NSURL, method: HTTPMethod, parameters: Dictionary<String,AnyObject>?) -> (request: NSURLRequest, error: NSError?) {
+        return createRequest(url, method: method, parameters: parameters, body:nil)
+    }
+    
     /**
         Creates a new NSMutableURLRequest object with configured options.
         
@@ -79,7 +83,7 @@ public class HTTPRequestSerializer: NSObject {
         
         :returns: A new NSMutableURLRequest with said options or an error.
     */
-    public func createRequest(url: NSURL, method: HTTPMethod, parameters: Dictionary<String,AnyObject>?) -> (request: NSURLRequest, error: NSError?) {
+    public func createRequest(url: NSURL, method: HTTPMethod, parameters: Dictionary<String,AnyObject>?, body: NSData?) -> (request: NSURLRequest, error: NSError?) {
         
         var request = newRequest(url, method: method)
         var isMulti = false
@@ -87,6 +91,12 @@ public class HTTPRequestSerializer: NSObject {
         if let params = parameters {
             isMulti = isMultiForm(params)
         }
+        
+        if let body = body {
+            request.HTTPBody = body
+            return (request,nil)
+        }
+        
         if isMulti {
             if(method != .POST && method != .PUT) {
                 request.HTTPMethod = HTTPMethod.POST.rawValue // you probably wanted a post

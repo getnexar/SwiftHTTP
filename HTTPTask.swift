@@ -158,7 +158,7 @@ public class HTTPOperation : NSOperation {
 }
 
 /// Configures NSURLSession Request for HTTPOperation. Also provides convenience methods for easily running HTTP Request.
-public class HTTPTask : NSObject, NSURLSessionDelegate, NSURLSessionTaskDelegate {
+public class HTTPTask : NSObject, NSURLSessionDelegate, NSURLSessionTaskDelegate , NSURLSessionDataDelegate {
     var backgroundTaskMap = Dictionary<String,BackgroundBlocks>()
     //var sess: NSURLSession?
     
@@ -169,12 +169,20 @@ public class HTTPTask : NSObject, NSURLSessionDelegate, NSURLSessionTaskDelegate
     //Returning nil from this method will cause the request to be rejected and cancelled
     public var auth:((NSURLAuthenticationChallenge) -> NSURLCredential?)?
     
+    // Delegate :
+    public var delegate :NSURLSessionDelegate?
+    
     //MARK: Public Methods
     
     /// A newly minted HTTPTask for your enjoyment.
     public override init() {
         super.init()
     }
+    
+    public func create(url: String, method: HTTPMethod, parameters: Dictionary<String,AnyObject>!, success:((HTTPResponse) -> Void)!, failure:((NSError, HTTPResponse?) -> Void)!) ->  HTTPOperation? {
+        return create(url, method: method, parameters: parameters, body:nil, success: success, failure: failure)
+    }
+    
     
     /** 
         Creates a HTTPOperation that can be scheduled on a NSOperationQueue. Called by convenience HTTP verb methods below.
@@ -187,9 +195,9 @@ public class HTTPTask : NSObject, NSURLSessionDelegate, NSURLSessionTaskDelegate
     
         :returns: A freshly constructed HTTPOperation to add to your NSOperationQueue.
     */
-    public func create(url: String, method: HTTPMethod, parameters: Dictionary<String,AnyObject>!, success:((HTTPResponse) -> Void)!, failure:((NSError, HTTPResponse?) -> Void)!) ->  HTTPOperation? {
-
-        let serialReq = createRequest(url, method: method, parameters: parameters)
+    public func create(url: String, method: HTTPMethod, parameters: Dictionary<String,AnyObject>!, body:NSData?, success:((HTTPResponse) -> Void)!, failure:((NSError, HTTPResponse?) -> Void)!) ->  HTTPOperation? {
+        
+        let serialReq = createRequest(url, method: method, parameters: parameters, body:body)
         if serialReq.error != nil {
             if failure != nil {
                 failure(serialReq.error!, nil)
@@ -300,8 +308,8 @@ public class HTTPTask : NSObject, NSURLSessionDelegate, NSURLSessionTaskDelegate
         :param: success The block that is run on a sucessful HTTP Request.
         :param: failure The block that is run on a failed HTTP Request.
     */
-    public func PUT(url: String, parameters: Dictionary<String,AnyObject>?, success:((HTTPResponse) -> Void)!, failure:((NSError, HTTPResponse?) -> Void)!) {
-        var opt = self.create(url, method:.PUT, parameters: parameters,success: success,failure: failure)
+    public func PUT(url: String, parameters: Dictionary<String,AnyObject>?, body: NSData?, success:((HTTPResponse) -> Void)!, failure:((NSError, HTTPResponse?) -> Void)!) {
+        var opt = self.create(url, method:.PUT, parameters: parameters,body:body, success: success,failure: failure)
         if opt != nil {
             opt!.start()
         }
@@ -376,6 +384,9 @@ public class HTTPTask : NSObject, NSURLSessionDelegate, NSURLSessionTaskDelegate
     }
     
     //MARK: Private Helper Methods
+    private func createRequest(url: String, method: HTTPMethod, parameters: Dictionary<String,AnyObject>!) -> (request: NSURLRequest, error: NSError?) {
+        return createRequest(url, method: method, parameters: parameters, body: nil)
+    }
     
     /**
         Creates and starts a HTTPOperation to download a file in the background.
@@ -386,7 +397,9 @@ public class HTTPTask : NSObject, NSURLSessionDelegate, NSURLSessionTaskDelegate
     
         :returns: A NSURLRequest from configured requestSerializer.
     */
-   private func createRequest(url: String, method: HTTPMethod, parameters: Dictionary<String,AnyObject>!) -> (request: NSURLRequest, error: NSError?) {
+   private func createRequest(url: String, method: HTTPMethod, parameters: Dictionary<String,AnyObject>!,
+    body:NSData?) -> (request: NSURLRequest, error: NSError?) {
+    
         var urlVal = url
         //probably should change the 'http' to something more generic
         if !url.hasPrefix("http") && self.baseURL != nil {
@@ -394,7 +407,7 @@ public class HTTPTask : NSObject, NSURLSessionDelegate, NSURLSessionTaskDelegate
             urlVal = "\(self.baseURL!)\(split)\(url)"
         }
     if let u = NSURL(string: urlVal) {
-        return self.requestSerializer.createRequest(u, method: method, parameters: parameters)
+        return self.requestSerializer.createRequest(u, method: method, parameters: parameters, body:body)
     }
     return (NSURLRequest(),createError(-1001))
     }
@@ -515,19 +528,27 @@ public class HTTPTask : NSObject, NSURLSessionDelegate, NSURLSessionTaskDelegate
     
     //TODO: not implemented yet.
     /// not implemented yet. The background upload finished and reports the response data (if any).
-    func URLSession(session: NSURLSession!, dataTask: NSURLSessionDataTask!, didReceiveData data: NSData!) {
-        //add upload finished logic
+    public func URLSession(session: NSURLSession, dataTask: NSURLSessionDataTask, didReceiveData data: NSData) {
+        if let delegate = delegate as? NSURLSessionDataDelegate{
+            delegate.URLSession!(session, dataTask: dataTask, didReceiveData: data)
+        }
     }
     
     //TODO: not implemented yet.
     /// not implemented yet.
     public func URLSession(session: NSURLSession, task: NSURLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
-        //add progress block logic
+        if let delegate = delegate as? NSURLSessionDataDelegate {
+            delegate.URLSession!(session, task: task, didSendBodyData: bytesSent, totalBytesSent: totalBytesSent, totalBytesExpectedToSend: totalBytesExpectedToSend)
+        }
     }
     
     //TODO: not implemented yet.
     /// not implemented yet.
-    func URLSession(session: NSURLSession!, downloadTask: NSURLSessionDownloadTask!, didResumeAtOffset fileOffset: Int64, expectedTotalBytes: Int64) {
-        
+    public func URLSession(session: NSURLSession!, downloadTask: NSURLSessionDownloadTask!, didResumeAtOffset fileOffset: Int64, expectedTotalBytes: Int64) {
+        if let delegate = delegate as? NSURLSessionDownloadDelegate {
+            delegate.URLSession!(session, downloadTask: downloadTask, didResumeAtOffset: fileOffset, expectedTotalBytes: expectedTotalBytes)
+        }
     }
+    
+    
 }
